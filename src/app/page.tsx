@@ -67,7 +67,13 @@ export default function Home() {
     const item={row:i+2,ok:Boolean(data.ok),message:String(data.message??data.error??"Unknown result")}; done=[...done,item];setResults([...done]);setProgress(Math.round((i+1)/rows.length*100));
     if(!item.ok){setMessage(`Stopped at Excel row ${i+2}. No later rows were submitted. Verify the Google Form response before retrying.`);break;}
    } catch(e){done=[...done,{row:i+2,ok:false,message:e instanceof Error?e.message:"Network error"}];setResults([...done]);setMessage(`Stopped at Excel row ${i+2} because the submission result could not be confirmed. Do not retry this row until you check Google Forms.`);break;}
-   if(i<rows.length-1) await new Promise(resolve=>setTimeout(resolve,1800));
+   if(i<rows.length-1) {
+    // Vary the pause around three minutes, rather than using a fixed interval.
+    // Examples: 3:09, 3:17, 3:36, 3:49, 3:06.
+    const delayMs = 186000 + Math.floor(Math.random() * (229000 - 186000 + 1));
+    setMessage(`Row ${i+2} submitted. Waiting ${Math.floor(delayMs/60000)}m ${Math.floor((delayMs%60000)/1000)}s before the next response.`);
+    await new Promise(resolve=>setTimeout(resolve,delayMs));
+   }
   }
   if(done.length===rows.length&&done.every(x=>x.ok))setMessage(`Completed: ${done.length} rows received a success response from Google Forms.`);
   setBusy(false);setConfirmed(false);
@@ -87,7 +93,7 @@ export default function Home() {
     <button disabled={busy||!confirmed||!valid} onClick={submitAll} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-400 px-4 py-3 font-semibold text-slate-950 disabled:opacity-40"><Send size={17}/>{busy?"Submitting…":"Submit all responses to Google Forms"}</button>
     {busy&&<div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-indigo-300" style={{width:progress+"%"}}/></div>}</>}
    </section>
-   <aside className="space-y-5"><section className="rounded-3xl border border-white/10 bg-slate-900/65 p-6"><h2 className="mb-4 font-semibold">Submission destination</h2><p className="text-sm text-slate-300">Your Work Engagement questionnaire Google Form</p><a className="mt-3 inline-block text-xs text-indigo-300 underline" href="https://docs.google.com/forms/d/e/1FAIpQLSfjE092Bc4OzAAW0ZKVPAmN1a7jfLQvwAma0ThsjHrJJgtIvw/viewform" target="_blank" rel="noreferrer">Open Google Form</a><div className="mt-5 space-y-3 text-xs text-slate-400"><p>• 42 pre-filled entry IDs configured</p><p>• Each Excel row submitted separately</p><p>• 1.8-second pause between submissions</p><p>• Stops at the first unconfirmed submission</p><p>• Does not alter historical timestamps</p></div></section>
+   <aside className="space-y-5"><section className="rounded-3xl border border-white/10 bg-slate-900/65 p-6"><h2 className="mb-4 font-semibold">Submission destination</h2><p className="text-sm text-slate-300">Your Work Engagement questionnaire Google Form</p><a className="mt-3 inline-block text-xs text-indigo-300 underline" href="https://docs.google.com/forms/d/e/1FAIpQLSfjE092Bc4OzAAW0ZKVPAmN1a7jfLQvwAma0ThsjHrJJgtIvw/viewform" target="_blank" rel="noreferrer">Open Google Form</a><div className="mt-5 space-y-3 text-xs text-slate-400"><p>• 42 pre-filled entry IDs configured</p><p>• Each Excel row submitted separately</p><p>• Variable pause of 3:06–3:49 between submissions (not a fixed 3 minutes)</p><p>• Stops at the first unconfirmed submission</p><p>• Does not alter historical timestamps</p></div></section>
    <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-6"><div className="mb-4 flex items-center gap-2"><CheckCircle2 className="text-indigo-300"/><h2 className="font-semibold">Submission results</h2></div>{results.length===0?<p className="text-sm text-slate-500">No submissions in this session yet.</p>:<><p className="mb-3 text-xs text-slate-400">{results.filter(x=>x.ok).length} accepted · {results.filter(x=>!x.ok).length} unconfirmed/failed</p><div className="max-h-80 space-y-2 overflow-auto">{results.map(r=><div key={r.row} className="flex items-start gap-2 text-xs"><span className={r.ok?"text-emerald-300":"text-rose-300"}>{r.ok?"✓":"!"}</span><span className="text-slate-300">Excel row {r.row}: {r.message}</span></div>)}</div></>}</section>
    <div className="flex items-start gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[.05] p-4 text-xs leading-5 text-amber-100/80"><AlertTriangle size={16} className="shrink-0"/><span>Google Forms may enforce sign-in, CAPTCHA, required-field rules, or anti-abuse limits. A failed or uncertain result must be checked in the Form responses before retrying to avoid duplicates.</span></div></aside>
   </div>
