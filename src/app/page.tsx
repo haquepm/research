@@ -7,9 +7,11 @@ type Result = { row: number; ok: boolean; message: string; status: "submitted" |
 type SavedJob = {
  version: 1; fileName: string; headers: string[]; rows: Row[]; results: Result[];
  nextIndex: number; confirmed: boolean; status: "ready" | "running" | "paused" | "completed" | "attention";
- inFlightIndex: number | null; message: string;
+ inFlightIndex: number | null; message: string; minIntervalSeconds: number; maxIntervalSeconds: number;
 };
 const STORAGE_KEY = "research-google-forms-submission-job-v2";
+const DEFAULT_MIN_INTERVAL = 186;
+const DEFAULT_MAX_INTERVAL = 229;
 const EXPECTED_HEADERS = [
 "1. Year of Birth","2. Gender","3. Marital Status","4. Current Work Location (IT Hub)","5. Total Work Experience","6. Current Designation Level","7. Highest Educational Qualification","8. Current Work Mode","9. Organization Size","10. Annual Income Category (INR)",
 "Work Engagement Practices [My organization provides excellent training programs to help me improve my technical and professional skills.]",
@@ -98,7 +100,7 @@ export default function Home() {
    const data=matrix.slice(1).filter(r=>r.some(v=>String(v??"").trim()!=="")).map(r=>EXPECTED_HEADERS.map((_,i)=>String(r[i]??"").trim()));
    const mismatches=EXPECTED_HEADERS.map((x,i)=>({i,actual:h[i]??"",expected:x})).filter(x=>x.actual!==x.expected);
    const ok=h.length===42 && mismatches.length===0 && data.length>0 && (matrix[0]??[]).length===42;
-   const next:SavedJob={version:1,fileName:file.name,headers:h,rows:data,results:[],nextIndex:0,confirmed:false,status:"ready",inFlightIndex:null,message:ok?\`Ready: \${data.length} rows; all 42 headers match exactly. Queue saved in this browser.\`:\`Cannot submit: expected exactly 42 columns in the configured order. Found \${h.length} headers and \${mismatches.length} header mismatches.\`};
+   const next:SavedJob={version:1,fileName:file.name,headers:h,rows:data,results:[],nextIndex:0,confirmed:false,status:"ready",inFlightIndex:null,minIntervalSeconds:DEFAULT_MIN_INTERVAL,maxIntervalSeconds:DEFAULT_MAX_INTERVAL,message:ok?\`Ready: \${data.length} rows; all 42 headers match exactly. Queue saved in this browser.\`:\`Cannot submit: expected exactly 42 columns in the configured order. Found \${h.length} headers and \${mismatches.length} header mismatches.\`};
    save(next);
   } catch(e) { alert(e instanceof Error?e.message:"Could not read workbook."); }
   setBusy(false);
@@ -136,7 +138,10 @@ export default function Home() {
    }
    next=jobRef.current!;
    if(next.nextIndex<next.rows.length) {
-    const delayMs=186000+Math.floor(Math.random()*(229000-186000+1));
+    const latest=jobRef.current!;
+    const minMs=Math.max(1,latest.minIntervalSeconds)*1000;
+    const maxMs=Math.max(latest.minIntervalSeconds,latest.maxIntervalSeconds)*1000;
+    const delayMs=minMs+Math.floor(Math.random()*(maxMs-minMs+1));
     const end=Date.now()+delayMs;
     let interrupted=false;
     while(Date.now()<end) {
@@ -168,6 +173,8 @@ export default function Home() {
  }
  const valid=Boolean(job && job.headers.length===42 && job.rows.length>0 && job.headers.every((h,i)=>h===EXPECTED_HEADERS[i]));
  const submitted=job?.results.filter(x=>x.status==="submitted").length??0;
+ const minInterval=job?.minIntervalSeconds??DEFAULT_MIN_INTERVAL;
+ const maxInterval=job?.maxIntervalSeconds??DEFAULT_MAX_INTERVAL;
  const uncertain=job?.results.find(x=>x.status==="uncertain");
  if(!hydrated) return <main className="min-h-screen p-10 text-slate-300">Loading saved submission queue…</main>;
  return <main className="min-h-screen px-5 py-8 md:px-10"><div className="mx-auto max-w-6xl">
@@ -180,6 +187,15 @@ export default function Home() {
     <p role="status" className="mt-4 text-sm text-slate-300">{job?.message??"Upload the Excel workbook to begin."}</p>
     {job&&valid&&<><div className="mt-5 rounded-xl border border-white/10 p-4"><div className="mb-3 flex items-center justify-between"><strong className="text-sm">Column mapping</strong><span className="text-xs text-slate-400">Excel order → Form entry order</span></div><div className="max-h-56 space-y-2 overflow-auto">{EXPECTED_HEADERS.map((h,i)=><div key={i} className="flex items-start justify-between gap-3 text-xs"><span className="min-w-0 text-slate-300">{i+1}. {h}</span><span className="text-emerald-300">Matched</span></div>)}</div></div>
     <div className="mt-5 rounded-xl border border-white/10 p-4"><strong className="text-sm">Preview (first 3 responses)</strong><div className="mt-3 space-y-3">{job.rows.slice(0,3).map((r,i)=><div key={i} className="border-b border-white/10 pb-3 last:border-0"><p className="mb-1 text-xs font-semibold text-indigo-200">Excel row {i+2}</p><p className="text-xs leading-5 text-slate-300">{r.slice(0,10).join(" · ")}</p></div>)}</div></div>
+    <div className="mt-5 rounded-xl border border-indigo-300/20 bg-indigo-300/[.04] p-4">
+     <div className="mb-3 flex items-center justify-between gap-3"><strong className="text-sm">Submission interval settings</strong><span className="text-xs text-indigo-200">Randomised delay</span></div>
+     <p className="mb-3 text-xs text-slate-400">Choose the minimum and maximum wait between successful submissions. The app randomly selects a delay within this range.</p>
+     <div className="grid grid-cols-2 gap-3">
+      <label className="text-xs text-slate-300">Minimum delay (seconds)<input type="number" min="1" max="3600" value={minInterval} disabled={busy} onChange={e=>{const v=Math.max(1,Math.min(3600,Number(e.target.value)||1));updateJob({minIntervalSeconds:v,maxIntervalSeconds:Math.max(v,maxInterval)});}} className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-50"/></label>
+      <label className="text-xs text-slate-300">Maximum delay (seconds)<input type="number" min={minInterval} max="3600" value={maxInterval} disabled={busy} onChange={e=>{const v=Math.max(minInterval,Math.min(3600,Number(e.target.value)||minInterval));updateJob({maxIntervalSeconds:v});}} className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950 px-3 py-2 text-sm text-white disabled:opacity-50"/></label>
+     </div>
+     <p className="mt-3 text-xs text-slate-400">Current random range: {Math.floor(minInterval/60)}m {minInterval%60}s to {Math.floor(maxInterval/60)}m {maxInterval%60}s. Settings are saved with your queue.</p>
+    </div>
     <label className="mt-5 flex items-start gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[.06] p-4 text-xs leading-5 text-amber-100"><input type="checkbox" checked={job.confirmed} onChange={e=>updateJob({confirmed:e.target.checked})} className="mt-1"/><span>I have verified the mapping and these are genuine responses that I am authorised to transcribe as new Google Forms submissions. I understand Google Forms will record new submission times.</span></label>
     <div className="mt-4 grid gap-3 sm:grid-cols-2">
      <button disabled={busy||!job.confirmed||job.status==="completed"||!valid||Boolean(uncertain)} onClick={submitAll} className="flex items-center justify-center gap-2 rounded-xl bg-indigo-400 px-4 py-3 font-semibold text-slate-950 disabled:opacity-40"><Play size={17}/>{job.status==="paused"||job.status==="attention"?"Resume submission":"Start submission"}</button>
@@ -192,7 +208,7 @@ export default function Home() {
     <button onClick={()=>{if(window.confirm("Clear the saved workbook and all local submission progress? This cannot undo Google Form submissions."))save(null);}} className="mt-4 flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300"><RotateCcw size={14}/>Clear saved queue</button>
     </>}
    </section>
-   <aside className="space-y-5"><section className="rounded-3xl border border-white/10 bg-slate-900/65 p-6"><h2 className="mb-4 font-semibold">Submission destination</h2><p className="text-sm text-slate-300">Your Work Engagement questionnaire Google Form</p><a className="mt-3 inline-block text-xs text-indigo-300 underline" href="https://docs.google.com/forms/d/e/1FAIpQLSfjE092Bc4OzAAW0ZKVPAmN1a7jfLQvwAma0ThsjHrJJgtIvw/viewform" target="_blank" rel="noreferrer">Open Google Form</a><div className="mt-5 space-y-3 text-xs text-slate-400"><p>• 42 exact column headers required</p><p>• Each Excel row submitted separately</p><p>• Variable pause of 3:06–3:49 between submissions</p><p>• Pause waits for the current request to finish</p><p>• Closing/reloading the app automatically pauses the queue</p><p>• Completed progress is saved in this browser</p></div></section>
+   <aside className="space-y-5"><section className="rounded-3xl border border-white/10 bg-slate-900/65 p-6"><h2 className="mb-4 font-semibold">Submission destination</h2><p className="text-sm text-slate-300">Your Work Engagement questionnaire Google Form</p><a className="mt-3 inline-block text-xs text-indigo-300 underline" href="https://docs.google.com/forms/d/e/1FAIpQLSfjE092Bc4OzAAW0ZKVPAmN1a7jfLQvwAma0ThsjHrJJgtIvw/viewform" target="_blank" rel="noreferrer">Open Google Form</a><div className="mt-5 space-y-3 text-xs text-slate-400"><p>• 42 exact column headers required</p><p>• Each Excel row submitted separately</p><p>• Adjustable random delay between submissions</p><p>• Pause waits for the current request to finish</p><p>• Closing/reloading the app automatically pauses the queue</p><p>• Completed progress is saved in this browser</p></div></section>
    <section className="rounded-3xl border border-white/10 bg-slate-900/65 p-6"><div className="mb-4 flex items-center gap-2"><CheckCircle2 className="text-indigo-300"/><h2 className="font-semibold">Submission results</h2></div>{!job||job.results.length===0?<p className="text-sm text-slate-500">No submissions in this saved queue yet.</p>:<><p className="mb-3 text-xs text-slate-400">{submitted} submitted · {job.results.filter(x=>x.status==="failed").length} failed · {job.results.filter(x=>x.status==="uncertain").length} unconfirmed</p><div className="max-h-80 space-y-2 overflow-auto">{job.results.map(r=><div key={r.row} className="flex items-start gap-2 text-xs"><span className={r.status==="submitted"?"text-emerald-300":r.status==="uncertain"?"text-amber-300":"text-rose-300"}>{r.status==="submitted"?"✓":r.status==="uncertain"?"?":"!"}</span><span className="text-slate-300">Excel row {r.row}: {r.message}</span></div>)}</div></>}</section>
    <div className="flex items-start gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[.05] p-4 text-xs leading-5 text-amber-100/80"><AlertTriangle size={16} className="shrink-0"/><span>Saved progress is local to this browser and device. If a tab closes during a Google Forms request, that row is marked unconfirmed; check Forms before retrying to avoid duplicates. Keep the tab open while a request is actively being sent.</span></div></aside>
   </div>
