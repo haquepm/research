@@ -76,7 +76,7 @@ export default function Home() {
       parsed.nextIndex=idx;
       parsed.inFlightIndex=null;
       parsed.status="attention";
-      parsed.message=\`Excel row \${idx+2} has an unconfirmed result. Check Google Forms before retrying or marking it submitted.\`;
+      parsed.message=`Excel row ${idx+2} has an unconfirmed result. Check Google Forms before retrying or marking it submitted.`;
      } else if(parsed.status==="running") {
       parsed.status="paused";
       parsed.message="Submission paused because the app was closed or refreshed. Resume when ready.";
@@ -100,7 +100,7 @@ export default function Home() {
    const data=matrix.slice(1).filter(r=>r.some(v=>String(v??"").trim()!=="")).map(r=>EXPECTED_HEADERS.map((_,i)=>String(r[i]??"").trim()));
    const mismatches=EXPECTED_HEADERS.map((x,i)=>({i,actual:h[i]??"",expected:x})).filter(x=>x.actual!==x.expected);
    const ok=h.length===42 && mismatches.length===0 && data.length>0 && (matrix[0]??[]).length===42;
-   const next:SavedJob={version:1,fileName:file.name,headers:h,rows:data,results:[],nextIndex:0,confirmed:false,status:"ready",inFlightIndex:null,minIntervalSeconds:DEFAULT_MIN_INTERVAL,maxIntervalSeconds:DEFAULT_MAX_INTERVAL,message:ok?\`Ready: \${data.length} rows; all 42 headers match exactly. Queue saved in this browser.\`:\`Cannot submit: expected exactly 42 columns in the configured order. Found \${h.length} headers and \${mismatches.length} header mismatches.\`};
+   const next:SavedJob={version:1,fileName:file.name,headers:h,rows:data,results:[],nextIndex:0,confirmed:false,status:"ready",inFlightIndex:null,minIntervalSeconds:DEFAULT_MIN_INTERVAL,maxIntervalSeconds:DEFAULT_MAX_INTERVAL,message:ok?`Ready: ${data.length} rows; all 42 headers match exactly. Queue saved in this browser.`:`Cannot submit: expected exactly 42 columns in the configured order. Found ${h.length} headers and ${mismatches.length} header mismatches.`};
    save(next);
   } catch(e) { alert(e instanceof Error?e.message:"Could not read workbook."); }
   setBusy(false);
@@ -120,20 +120,20 @@ export default function Home() {
    next=jobRef.current!;
    if(pauseRef.current) { updateJob({status:"paused",inFlightIndex:null,message:"Paused. Your queue and completed responses are saved in this browser."}); break; }
    const idx=next.nextIndex;
-   if(idx>=next.rows.length) { updateJob({status:"completed",inFlightIndex:null,message:\`Completed: all \${next.rows.length} rows received a success response.\`}); break; }
-   updateJob({status:"running",inFlightIndex:idx,message:\`Submitting Excel row \${idx+2}…\`});
+   if(idx>=next.rows.length) { updateJob({status:"completed",inFlightIndex:null,message:`Completed: all ${next.rows.length} rows received a success response.`}); break; }
+   updateJob({status:"running",inFlightIndex:idx,message:`Submitting Excel row ${idx+2}…`});
    try {
     const response=await fetch("/api/google-form-submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({answers:next.rows[idx]})});
     const data=await response.json();
     const ok=Boolean(data.ok);
     const item:Result={row:idx+2,ok,status:ok?"submitted":"failed",message:String(data.message??data.error??"Unknown result")};
     const after=jobRef.current!;
-    updateJob({results:[...after.results.filter(x=>x.row!==idx+2),item].sort((a,b)=>a.row-b.row),nextIndex:ok?idx+1:idx,inFlightIndex:null,status:ok?"running":"attention",message:ok?\`Excel row \${idx+2} submitted successfully.\`:\`Stopped at Excel row \${idx+2}. Check Google Forms before retrying.\`});
+    updateJob({results:[...after.results.filter(x=>x.row!==idx+2),item].sort((a,b)=>a.row-b.row),nextIndex:ok?idx+1:idx,inFlightIndex:null,status:ok?"running":"attention",message:ok?`Excel row ${idx+2} submitted successfully.`:`Stopped at Excel row ${idx+2}. Check Google Forms before retrying.`});
     if(!ok)break;
    } catch(e) {
     const after=jobRef.current!;
     const item:Result={row:idx+2,ok:false,status:"uncertain",message:"Network error; Google Forms may or may not have received this row. Check the Form before retrying."};
-    updateJob({results:[...after.results.filter(x=>x.row!==idx+2),item].sort((a,b)=>a.row-b.row),nextIndex:idx,inFlightIndex:null,status:"attention",message:\`Excel row \${idx+2} is unconfirmed. Check Google Forms before retrying.\`});
+    updateJob({results:[...after.results.filter(x=>x.row!==idx+2),item].sort((a,b)=>a.row-b.row),nextIndex:idx,inFlightIndex:null,status:"attention",message:`Excel row ${idx+2} is unconfirmed. Check Google Forms before retrying.`});
     break;
    }
    next=jobRef.current!;
@@ -147,7 +147,7 @@ export default function Home() {
     while(Date.now()<end) {
      if(pauseRef.current) { interrupted=true; break; }
      const remaining=end-Date.now();
-     setCountdown(\`\${Math.floor(remaining/60000)}m \${Math.floor((remaining%60000)/1000)}s\`);
+     setCountdown(`${Math.floor(remaining/60000)}m ${Math.floor((remaining%60000)/1000)}s`);
      await wait(Math.min(1000,remaining));
     }
     setCountdown("");
@@ -202,7 +202,7 @@ export default function Home() {
      <button disabled={!busy&&job.status!=="running"} onClick={pause} className="flex items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-3 font-semibold text-slate-100 disabled:opacity-40"><Pause size={17}/>Pause submission</button>
     </div>
     {countdown&&busy&&<p className="mt-3 text-center text-sm text-indigo-200">Next response in {countdown}</p>}
-    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-indigo-300" style={{width:\`\${job.rows.length?submitted/job.rows.length*100:0}%\`}}/></div>
+    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-indigo-300" style={{width:`${job.rows.length?submitted/job.rows.length*100:0}%`}}/></div>
     <p className="mt-2 text-xs text-slate-400">{submitted} of {job.rows.length} responses confirmed submitted</p>
     {uncertain&&<div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[.06] p-4 text-sm text-amber-100"><p className="font-semibold">Excel row {uncertain.row} needs verification</p><p className="mt-1 text-xs">{uncertain.message}</p><p className="mt-3 text-xs">Check the Google Form responses first. If it is already there, mark it submitted. Otherwise, queue it for retry.</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>resolveUncertain("submitted")} className="rounded-lg bg-emerald-300 px-3 py-2 text-xs font-semibold text-slate-950">I found it in Forms — mark submitted</button><button onClick={()=>resolveUncertain("retry")} className="rounded-lg border border-amber-200/30 px-3 py-2 text-xs">Not found — allow retry</button></div></div>}
     <button onClick={()=>{if(window.confirm("Clear the saved workbook and all local submission progress? This cannot undo Google Form submissions."))save(null);}} className="mt-4 flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300"><RotateCcw size={14}/>Clear saved queue</button>
