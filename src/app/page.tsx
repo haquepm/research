@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, CheckCircle2, FileSpreadsheet, FolderKanban, ShieldCheck, UploadCloud, Users, X } from "lucide-react";
+import { Activity, CheckCircle2, FileSpreadsheet, FolderKanban, LockKeyhole, ShieldCheck, UploadCloud, Users, X } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 import { cleanValue, respondentCode, sha256, type ParsedRow } from "@/lib/importer";
 
